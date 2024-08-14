@@ -1,0 +1,11 @@
+socket:
+  host: 127.0.0.1
+  port: 3333
+
+middlewares:
+  - miniapi.middlewares:SecurityMiddleware
+  - miniapi.middlewares:CorsMiddleware
+
+final:
+  secret_key: v_lySriFQDHFGOfJ-Ef8v1LKdZ5RKjJReUtFeOULSWs=
+
