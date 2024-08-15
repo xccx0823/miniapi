@@ -4,6 +4,7 @@ import typing as t
 import yaml
 from werkzeug import run_simple
 
+from miniapi.const import HTTP_METHODS
 from miniapi.exc import HTTPException
 from miniapi.objects import Objects
 from miniapi.request import Request
@@ -12,8 +13,6 @@ from miniapi.route import HandlerMapper
 from miniapi.utils import get_root_path
 
 objects: t.Optional[Objects] = None
-
-HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 
 
 class _RouteContext:
