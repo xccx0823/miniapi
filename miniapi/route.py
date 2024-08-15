@@ -23,13 +23,13 @@ class HandlerMapper:
             return self.__mapper[path][method]
         return None
 
-    def add(self, path, methods, handler):
+    def add(self, path, methods, handler, middlewares):
         for method in methods:
             path_exist, method_exist = self.exists(path, method)
             if path_exist and method_exist:
                 raise AssertionError(f"{method} {path} 已经注册过了")
             self.__mapper[path] = dict()
-            self.__mapper[path][method] = handler
+            self.__mapper[path][method] = (handler, middlewares)
 
     def exists(self, path, method) -> t.Tuple[bool, bool]:
         if path in self.__mapper:

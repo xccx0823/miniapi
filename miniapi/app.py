@@ -50,7 +50,8 @@ class _RouteContext:
             raise HTTPException(404)
         if not method_exist:
             raise HTTPException(405)
-        handler = self.__handlers_mapper.get(request.path, request.method, is_exist=True)
+        # TODO:自定义中间件 middlewares, 全局中间件的实现
+        handler, middlewares = self.__handlers_mapper.get(request.path, request.method, is_exist=True)
         response = adaption_response(handler(request))
         return response
 
