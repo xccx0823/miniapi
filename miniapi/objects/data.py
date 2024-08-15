@@ -2,7 +2,7 @@ import typing as t
 
 
 class _Know:
-    """不知道的值"""
+    """不明确的值"""
 
 
 _know = _Know()
@@ -12,7 +12,7 @@ class DataObjects:
     """数据操作"""
 
     @staticmethod
-    def p_get(data: t.List[dict], column: str, default: t.Any = None, ignore: bool = False) -> list:
+    def o_get(data: t.List[dict], column: str, default: t.Any = None, ignore: bool = False) -> list:
         """获取字典或其他类型的对象的指定字段的值
 
         :param data: 数据
@@ -23,7 +23,7 @@ class DataObjects:
         >>> from miniapi import objects
         >>>
         >>> example_data = [{'a': 1, 'b': 2, 'c': 3}, ...]
-        >>> result = objects.p_get(example_data, 'a')
+        >>> result = objects.o_get(example_data, 'a')
         >>> # result = [1, ...]
         """
         lis = []
@@ -38,7 +38,7 @@ class DataObjects:
         return lis
 
     @staticmethod
-    def p_drop(data: t.List[dict], columns: list):
+    def o_drop(data: t.List[dict], columns: list):
         """删除列表嵌套字典中的指定的多个字段
 
         :param data: 数据
@@ -47,7 +47,7 @@ class DataObjects:
         >>> from miniapi import objects
         >>>
         >>> example_data = [{'a': 1, 'b': 2, 'c': 3}, ...]
-        >>> example_data = objects.p_drop(example_data, ['a'])
+        >>> example_data = objects.o_drop(example_data, ['a'])
         >>> # example_data = [{'b': 2, 'c': 3}, ...]
         """
         drop_data = []
@@ -58,7 +58,7 @@ class DataObjects:
         return drop_data
 
     @staticmethod
-    def p_index(data: t.List[list], index: int = 0, default: t.Any = None, ignore: bool = False) -> list:
+    def o_index(data: t.List[list], index: int = 0, default: t.Any = None, ignore: bool = False) -> list:
         """获取列表嵌套字典和可以索引取值的对象里面的指定索引位置的值
 
         :param data: 数据
@@ -69,7 +69,7 @@ class DataObjects:
         >>> from miniapi import objects
         >>>
         >>> example_data = [[1, 2, 3], ...]
-        >>> result = objects.p_index(example_data, 1)
+        >>> result = objects.o_index(example_data, 1)
         >>> # result = [2, ...]
         """
         values = []
