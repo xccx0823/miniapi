@@ -1,10 +1,8 @@
 import os
-import traceback
 import typing as t
 
 import yaml
 from werkzeug import run_simple
-from werkzeug.exceptions import HTTPException as WerkzeugHTTPException
 
 from miniapi.exc import HTTPException
 from miniapi.objects import Objects
@@ -22,36 +20,40 @@ class _RouteContext:
     """APP请求路由分发上下文"""
 
     def __init__(self):
+        # 注册的中间件列表
         self.middlewares: list = []
-        self.after_request_funcs: list = []
+
+        # 自定义异常拦截函数列表
         self.error_blocking_funcs: list = []
 
-        self.__handlers = HandlerMapper()
+        # 路由映射执行函数
+        self.__handlers_mapper = HandlerMapper()
 
     def wsgi_app(self, environ, start_response):
         """wsgi请求上下文"""
         request = Request(environ)
         try:
             response = self.dispatch_request(request)
-        except HTTPException as e:
-            return Response(e.message, e.code)(environ, start_response)
+        except Exception as e:
+
+            # miniapi HTTPException异常拦截
+            if isinstance(e, HTTPException):
+                return Response(e.message, e.code)(environ, start_response)
+
+            # 其他异常均以500异常返回
+            return Response('Internal Server Error', 500)(environ, start_response)
+
         return response(environ, start_response)
 
     def dispatch_request(self, request):
-        path_exist, method_exist = self.__handlers.exists(request.path, request.method)
+        path_exist, method_exist = self.__handlers_mapper.exists(request.path, request.method)
         if not path_exist:
             raise HTTPException(404)
         if not method_exist:
             raise HTTPException(405)
-        try:
-            handler = self.__handlers.get(request.path, request.method, is_exist=True)
-            response = adaption_response(handler(request))
-            return response
-        except WerkzeugHTTPException as e:
-            raise HTTPException(e.code)
-        except Exception as _:
-            traceback.print_exc()
-            raise HTTPException(500)
+        handler = self.__handlers_mapper.get(request.path, request.method, is_exist=True)
+        response = adaption_response(handler(request))
+        return response
 
     def route(self, rule, methods: t.Optional[t.List[str]] = None):
         """注册普通函数的装饰器
@@ -108,7 +110,7 @@ class _RouteContext:
             if method not in HTTP_METHODS:
                 raise AssertionError(f'不支持的请求方式:{method},请在{HTTP_METHODS}中选择需要的请求方式.')
             _methods.append(method)
-        self.__handlers.add(path, _methods, func)
+        self.__handlers_mapper.add(path, _methods, func)
 
 
 class _SetupConfigManager:
@@ -127,22 +129,22 @@ class _SetupConfigManager:
 
         # 全局常量
         # 全局常量的key以及其签到结构中的字典的key都会转化为大写
-
         final = self.recursively_capitalize_keys(self.config.get(self.FINAL_CONFIG_KEY))
         self.final = final
 
-    def get_socket_info(self) -> (str, int, dict):
+    def get_socket_info(self) -> t.Tuple[str, int, dict]:
         """获取并校验启动信息配置"""
         config = self.config.get(self.SOCKET_CONFIG_KEY, dict())
         host = config.pop('host', self.DEFAULT_HOST)
         port = config.pop('port', self.DEFAULT_PORT)
         return host, port, config
 
-    def get_middleware(self) -> []:
+    def get_middleware(self) -> t.List[str]:
         """获取中间件配置"""
-        return self.config.get(self.MIDDLEWARES_CONFIG_KEY, list())
+        return self.config.get(self.MIDDLEWARES_CONFIG_KEY, [])
 
-    def get_final(self):
+    def get_final(self) -> dict:
+        """定义全局配置常量"""
         return self.config.get(self.FINAL_CONFIG_KEY)
 
     @staticmethod
@@ -170,19 +172,13 @@ class _SetupConfigManager:
             return input_data
 
 
-class MiniApi(_RouteContext, _SetupConfigManager):
-    """RPC路由风格的纯后端web框架"""
-
-    request_class: t.Type[Request] = Request
-    response_class: t.Type[Response] = Response
+class MiniApi:
+    """简易的api框架"""
 
     def __call__(self, environ, start_response):
         return self.wsgi_app(environ, start_response)
 
     def __init__(self, import_name: str, obj_cls: t.Type[Objects] = None, root_path: t.Optional[str] = None):
-        # 初始化 _RouteContext
-        _RouteContext.__init__(self)
-
         # 生成root_path
         self.import_name = import_name
         if root_path is None:
@@ -191,8 +187,24 @@ class MiniApi(_RouteContext, _SetupConfigManager):
         # Glight框架所有额外功能的装饰器以及函数方法
         self.objects = self._make_objects(obj_cls)
 
-        # 初始化 _SetupManager
-        _SetupConfigManager.__init__(self, root_path)
+        # 请求上下文
+        self.__context = _RouteContext()
+        self.__config = _SetupConfigManager(root_path)
+
+    def wsgi_app(self, environ, start_response):
+        return self.__context.wsgi_app(environ, start_response)
+
+    def config(self):
+        return self.__config.config
+
+    def final(self):
+        return self.__config.final
+
+    def route(self, rule, methods: t.Optional[t.List[str]] = None):
+        return self.__context.route(rule, methods)
+
+    def add_url_rule(self, path, methods: t.Optional[t.List[str]] = None, func=None):
+        return self.__context.add_url_rule(path, methods, func)
 
     def set_objects(self, objs_cls: t.Type[Objects] = None):
         """添加继承了Objects的类，用于额外添加功能"""
@@ -209,5 +221,5 @@ class MiniApi(_RouteContext, _SetupConfigManager):
         return objects
 
     def run(self):
-        host, port, options = self.get_socket_info()
+        host, port, options = self.__config.get_socket_info()
         run_simple(host, port, self, **options)

@@ -1,3 +1,6 @@
+import typing as t
+
+
 class Route:
 
     def __init__(self, prefix='/'):
@@ -28,7 +31,7 @@ class HandlerMapper:
             self.__mapper[path] = dict()
             self.__mapper[path][method] = handler
 
-    def exists(self, path, method) -> (bool, bool):
+    def exists(self, path, method) -> t.Tuple[bool, bool]:
         if path in self.__mapper:
             path_exist = True
             if method in self.__mapper[path]:
@@ -40,5 +43,9 @@ class HandlerMapper:
             method_exist = False
         return path_exist, method_exist
 
-    def print(self):
+    def print_mapper(self):
         """展示注册过的请求的地址以及请求方式"""
+        for path, method_handlers in self.__mapper.items():
+            print(f'| {path}')
+            for method, handler in method_handlers.items():
+                print(f'|: {method} {handler.__name__}')
