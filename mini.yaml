@@ -3,8 +3,9 @@ socket:
   port: 3333
 
 middlewares:
-  - miniapi.middlewares:SecurityMiddleware
-  - miniapi.middlewares:CorsMiddleware
+  miniapi.middlewares:SecurityMiddleware:
+  miniapi.middlewares:CorsMiddleware:
+    allow: *
 
 final:
   secret_key: v_lySriFQDHFGOfJ-Ef8v1LKdZ5RKjJReUtFeOULSWs=
