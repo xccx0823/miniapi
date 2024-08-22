@@ -79,7 +79,7 @@ class _SetupConfigManager:
             return input_data
 
 
-class MiniApi:
+class Application:
     """简易的api框架"""
 
     def __call__(self, environ, start_response):
@@ -164,10 +164,10 @@ class MiniApi:
         """注册普通函数的装饰器
 
         使用示例:
-            >>> from miniapi import MiniApi
+            >>> from miniapi import Application
             >>>
             >>>
-            >>> app = MiniApi(__name__)
+            >>> app = Application(__name__)
             >>>
             >>> app.route('/index', methods=['GET'])
             >>> def index(request):
@@ -199,10 +199,10 @@ class MiniApi:
         """函数的方式注册函数路由
 
         使用示例:
-            >>> from miniapi import MiniApi
+            >>> from miniapi import Application
             >>>
             >>>
-            >>> app = MiniApi(__name__)
+            >>> app = Application(__name__)
             >>>
             >>> def index(request):
             >>>     ...
@@ -225,10 +225,10 @@ class MiniApi:
         :param forbidden: 禁止注册的中间件列表,参数为空列表时,不禁止任何中间件
 
         使用示例:
-            >>> from miniapi import MiniApi
+            >>> from miniapi import Application
             >>>
             >>>
-            >>> app = MiniApi(__name__)
+            >>> app = Application(__name__)
             >>>
             >>> @app.middlewares([middleware1, middleware2])  # noqa
             >>> def index(request):
