@@ -223,3 +223,8 @@ class MiniApi:
     def run(self):
         host, port, options = self.__config.get_socket_info()
         run_simple(host, port, self, **options)
+
+
+def create_app(import_name: str, obj_cls: t.Type[Objects] = None, root_path: t.Optional[str] = None) -> MiniApi:
+    """创建miniapi实例"""
+    return MiniApi(import_name, obj_cls, root_path)
