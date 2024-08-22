@@ -1,0 +1,18 @@
+# 默认情况下，应用程序将监听127.0.0.1:3333。您可以通过修改以下值来更改主机和端口。
+socket:
+  host: 127.0.0.1
+  port: 3333
+
+# 全局每次请求必会执行的插件
+plugins:
+  - name: miniapi.plugins:SecurityPlugin
+  - name: miniapi.plugins:CorsPlugin
+
+# 全局中间件
+middlewares:
+  - name: miniapi.middlewares:CorsMiddleware
+
+# 项目常量，可以在这里定义一些常量，供其他模块使用。
+final:
+  secret_key: v_lySriFQDHFGOfJ-Ef8v1LKdZ5RKjJReUtFeOULSWs=
+
