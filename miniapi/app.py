@@ -1,10 +1,9 @@
 import inspect
-import os
 import typing as t
 from wsgiref.simple_server import make_server
 
-import yaml
-
+from miniapi import g
+from miniapi.config import _SetupConfig
 from miniapi.const import HTTP_METHODS
 from miniapi.exc import HTTPException
 from miniapi.httpserver.handler import WSGIRequestHandler
@@ -12,71 +11,10 @@ from miniapi.httpserver.server import ThreadingWSGIServer
 from miniapi.middleware.base import MiddlewareBase
 from miniapi.objects import Objects
 from miniapi.request import Request
-from miniapi.response import Response
+from miniapi.response import Response, JsonResponse
 from miniapi.route import HandlerMapper
 from miniapi.status import HTTPStatus
 from miniapi.utils import get_root_path, import_string
-
-objects: t.Optional[Objects] = None
-
-
-class _SetupConfig:
-    """初始化的配置管理"""
-
-    SOCKET_CONFIG_KEY = 'socket'
-    MIDDLEWARES_CONFIG_KEY = 'middlewares'
-    FINAL_CONFIG_KEY = 'final'
-
-    DEFAULT_HOST = 'localhost'
-    DEFAULT_PORT = 3323
-
-    def __init__(self, root_path):
-        # 全局配置
-        self.config = self.read_app_yaml(root_path)
-
-        # 全局常量
-        # 全局常量的key以及其签到结构中的字典的key都会转化为大写
-        final = self.recursively_capitalize_keys(self.config.get(self.FINAL_CONFIG_KEY))
-        self.final = final
-
-    def get_socket_info(self) -> t.Tuple[str, int]:
-        """获取并校验启动信息配置"""
-        config = self.config.get(self.SOCKET_CONFIG_KEY, dict())
-        host = config.pop('host', self.DEFAULT_HOST)
-        port = config.pop('port', self.DEFAULT_PORT)
-        return host, port
-
-    def get_middleware(self) -> t.List[str]:
-        """获取中间件配置"""
-        return self.config.get(self.MIDDLEWARES_CONFIG_KEY, [])
-
-    def get_final(self) -> dict:
-        """定义全局配置常量"""
-        return self.config.get(self.FINAL_CONFIG_KEY)
-
-    @staticmethod
-    def read_app_yaml(root_path):
-        """读取app所需要的ini配置文件"""
-        with open(os.path.join(root_path, 'application.yaml'), 'r') as file:
-            data = yaml.safe_load(file)
-        return data
-
-    def recursively_capitalize_keys(self, input_data):
-        """将传入数据中的字典的key转化为大写，不管嵌套多深"""
-        if isinstance(input_data, dict):
-            new_dict = {}
-            for key, value in input_data.items():
-                new_key = key.upper()
-                new_value = self.recursively_capitalize_keys(value)
-                new_dict[new_key] = new_value
-            return new_dict
-        elif isinstance(input_data, list):
-            new_list = []
-            for item in input_data:
-                new_list.append(self.recursively_capitalize_keys(item))
-            return new_list
-        else:
-            return input_data
 
 
 class Application:
@@ -95,7 +33,7 @@ class Application:
         self.objects = self._make_objects(obj_cls)
 
         # 请求上下文
-        self.__config = _SetupConfig(root_path)
+        self.__config = self.init_config(root_path)
 
         # 全局中间件列表
         self.middlewares_list: list = []
@@ -114,17 +52,24 @@ class Application:
 
     def set_objects(self, objs_cls: t.Type[Objects] = None):
         """添加继承了Objects的类，用于额外添加功能"""
-        global objects
-        objects = objs_cls(self)
-        self.objects = objects
+        _objs = objs_cls(self)
+        g.objects = _objs
+        self.objects = _objs
+
+    @staticmethod
+    def init_config(root_path: str) -> _SetupConfig:
+        """初始化配置"""
+        config = _SetupConfig(root_path)
+        g.config = config
+        return config
 
     def _make_objects(self, objs_cls: t.Type[Objects] = None):
-        global objects
         if objs_cls:
-            objects = objs_cls(self)
+            _objs = objs_cls(self)
         else:
-            objects = Objects(self)
-        return objects
+            _objs = Objects(self)
+        g.objects = _objs
+        return _objs
 
     def run(self):
         host, port = self.__config.get_socket_info()
@@ -132,11 +77,26 @@ class Application:
             print(f"Serving on http://{host}:{port}")  # noqa
             server.serve_forever()
 
+    @staticmethod
+    def adapt_response(response):
+        if isinstance(response, Response):
+            return response
+        elif isinstance(response, str):
+            return Response(body=response)
+        elif isinstance(response, (list, dict)):
+            return JsonResponse(data=response)
+        else:
+            return Response(body=str(response))
+
     def wsgi_app(self, environ, start_response):
         """wsgi请求上下文"""
         request = Request(environ)
         try:
             response = self.dispatch_request(request)
+
+            # 自适应返回结果
+            response = self.adapt_response(response)
+
         except Exception as e:
 
             # miniapi HTTPException异常拦截
