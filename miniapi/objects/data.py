@@ -82,35 +82,3 @@ class DataObjects:
                 value = row[index]
             values.append(value)
         return values
-
-    @staticmethod
-    def checkout(rule, many=False):
-        """检查请求参数
-
-        :param rule: 参数规则
-        :param many: 校验请求的参数是否是列表
-        """
-
-        def wrapper(func):
-            def inner(*args, **kwargs):
-                return func(*args, **kwargs)
-
-            return inner
-
-        return wrapper
-
-    @staticmethod
-    def serialization(serialize, many=False):
-        """序列化返回结果
-
-        :param serialize: 序列化类
-        :param many: 返回的结果是否是列表
-        """
-
-        def wrapper(func):
-            def inner(*args, **kwargs):
-                return func(*args, **kwargs)
-
-            return inner
-
-        return wrapper
