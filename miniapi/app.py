@@ -1,16 +1,19 @@
+import inspect
 import os
 import typing as t
+from wsgiref.simple_server import make_server
 
 import yaml
-from werkzeug import run_simple
 
 from miniapi.const import HTTP_METHODS
 from miniapi.exc import HTTPException
+from miniapi.middleware.base import MiddlewareBase
 from miniapi.objects import Objects
 from miniapi.request import Request
-from miniapi.response import Response, adaption_response
+from miniapi.response import Response
 from miniapi.route import HandlerMapper
-from miniapi.utils import get_root_path
+from miniapi.status import HTTPStatus
+from miniapi.utils import get_root_path, import_string
 
 objects: t.Optional[Objects] = None
 
@@ -35,12 +38,12 @@ class _SetupConfigManager:
         final = self.recursively_capitalize_keys(self.config.get(self.FINAL_CONFIG_KEY))
         self.final = final
 
-    def get_socket_info(self) -> t.Tuple[str, int, dict]:
+    def get_socket_info(self) -> t.Tuple[str, int]:
         """获取并校验启动信息配置"""
         config = self.config.get(self.SOCKET_CONFIG_KEY, dict())
         host = config.pop('host', self.DEFAULT_HOST)
         port = config.pop('port', self.DEFAULT_PORT)
-        return host, port, config
+        return host, port
 
     def get_middleware(self) -> t.List[str]:
         """获取中间件配置"""
@@ -129,8 +132,10 @@ class Application:
         return objects
 
     def run(self):
-        host, port, options = self.__config.get_socket_info()
-        run_simple(host, port, self, **options)
+        host, port = self.__config.get_socket_info()
+        with make_server(host, port, self) as server:
+            print(f"Serving on {host}:{port}...")
+            server.serve_forever()
 
     def wsgi_app(self, environ, start_response):
         """wsgi请求上下文"""
@@ -141,109 +146,97 @@ class Application:
 
             # miniapi HTTPException异常拦截
             if isinstance(e, HTTPException):
-                return Response(e.message, e.code)(environ, start_response)
+                return Response(status=e.status)
 
             # 其他异常均以500异常返回
-            return Response('Internal Server Error', 500)(environ, start_response)
+            return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
 
         return response(environ, start_response)
 
     def dispatch_request(self, request):
         path_exist, method_exist = self.__handlers_mapper.exists(request.path, request.method)
         if not path_exist:
-            raise HTTPException(404)
+            raise HTTPException(HTTPStatus.NOT_FOUND)
         if not method_exist:
-            raise HTTPException(405)
-        # TODO:自定义中间件 middlewares, 全局中间件的实现
-        # TODO:还是要添加一个路由的唯一ID
-        handler, middlewares = self.__handlers_mapper.get(request.path, request.method, is_exist=True)
-        response = adaption_response(handler(request))
+            raise HTTPException(HTTPStatus.METHOD_NOT_ALLOWED)
+        handler, middlewares = self.__handlers_mapper.get(request.path, request.method)
+        response = handler(request)
         return response
 
-    def route(self, rule, methods: t.Optional[t.List[str]] = None):
-        """注册普通函数的装饰器
-
-        使用示例:
-            >>> from miniapi import Application
-            >>>
-            >>>
-            >>> app = Application(__name__)
-            >>>
-            >>> app.route('/index', methods=['GET'])
-            >>> def index(request):
-            >>>     ...
-        """
+    def route(
+            self,
+            rule: str,
+            methods: t.List[str],
+            middlewares: t.Optional[list] = None,
+            forbidden: t.Optional[list] = None):
+        """注册普通函数的装饰器"""
 
         def decorator(func):
-            self.add_url_rule(rule, methods, func)
+            self.add_url_rule(rule, func, methods, middlewares, forbidden)
             return func
 
         return decorator
 
-    def get(self, rule):
-        return self.route(rule, methods=['GET'])
+    def get(self, rule: str, middlewares: t.Optional[list] = None, forbidden: t.Optional[list] = None):
+        return self.route(rule, methods=['GET'], middlewares=middlewares, forbidden=forbidden)
 
-    def post(self, rule):
-        return self.route(rule, methods=['POST'])
+    def post(self, rule: str, middlewares: t.Optional[list] = None, forbidden: t.Optional[list] = None):
+        return self.route(rule, methods=['POST'], middlewares=middlewares, forbidden=forbidden)
 
-    def put(self, rule):
-        return self.route(rule, methods=['PUT'])
+    def put(self, rule: str, middlewares: t.Optional[list] = None, forbidden: t.Optional[list] = None):
+        return self.route(rule, methods=['PUT'], middlewares=middlewares, forbidden=forbidden)
 
-    def delete(self, rule):
-        return self.route(rule, methods=['DELETE'])
+    def delete(self, rule: str, middlewares: t.Optional[list] = None, forbidden: t.Optional[list] = None):
+        return self.route(rule, methods=['DELETE'], middlewares=middlewares, forbidden=forbidden)
 
-    def patch(self, rule):
-        return self.route(rule, methods=['PATCH'])
+    def patch(self, rule: str, middlewares: t.Optional[list] = None, forbidden: t.Optional[list] = None):
+        return self.route(rule, methods=['PATCH'], middlewares=middlewares, forbidden=forbidden)
 
-    def add_url_rule(self, path, methods: t.Optional[t.List[str]] = None, func=None):
-        """函数的方式注册函数路由
-
-        使用示例:
-            >>> from miniapi import Application
-            >>>
-            >>>
-            >>> app = Application(__name__)
-            >>>
-            >>> def index(request):
-            >>>     ...
-            >>>
-            >>> app.add_url_rule('/index', index, methods=['GET'])
-        """
+    def add_url_rule(
+            self,
+            path: str,
+            func=None,
+            methods: t.Optional[t.List[str]] = None,
+            middlewares: t.Optional[list] = None,
+            forbidden: t.Optional[list] = None):
+        """函数的方式注册函数路由"""
         _methods = []
         for method in methods:
             method = method.upper()
             if method not in HTTP_METHODS:
                 raise AssertionError(f'不支持的请求方式:{method},请在{HTTP_METHODS}中选择需要的请求方式.')
             _methods.append(method)
-        # 注册一个路由时仅会先添加全局的中间件
-        self.__handlers_mapper.add(path, _methods, func, middlewares=self.middlewares_list)
 
-    def middlewares(self, middlewares: t.Optional[list] = None, forbidden: t.Optional[list] = None):
-        """注册普通函数的中间件装饰器
+        # 检查func中是否包含request参数
+        signature = inspect.signature(func)
+        if 'request' not in signature.parameters:
+            raise ValueError(f"函数 '{func.__name__}' 必须包含 'request' 参数.")
 
-        :param middlewares: 注册的非全局中间件列表,参数为空列表时,仅会执行全局中间件
-        :param forbidden: 禁止注册的中间件列表,参数为空列表时,不禁止任何中间件
+        # 检查中间件
+        middlewares = middlewares or []
+        forbidden = forbidden or []
+        for _m in middlewares:
+            if not issubclass(_m, MiddlewareBase):
+                raise AssertionError(f'中间件类型错误,请继承MiddlewareBase类')
+        for _m in forbidden:
+            if not issubclass(_m, MiddlewareBase):
+                raise AssertionError(f'中间件类型错误,请继承MiddlewareBase类')
+        _middlewares = []
+        for _m in self.middlewares_list + middlewares:
+            if _m in forbidden:
+                continue
+            if _m in _middlewares:
+                continue
+            _middlewares.append(_m)
 
-        使用示例:
-            >>> from miniapi import Application
-            >>>
-            >>>
-            >>> app = Application(__name__)
-            >>>
-            >>> @app.middlewares([middleware1, middleware2])  # noqa
-            >>> def index(request):
-            >>>     ...
-        """
-        if middlewares is None and forbidden is None:
-            raise AssertionError('请至少指定一个中间件列表')
-        if middlewares and forbidden:
-            raise AssertionError('请不要同时指定中间件列表和禁止列表')
+        self.__handlers_mapper.add(path, _methods, func, middlewares=middlewares)
 
-        def decorator(func):
-            self.add_middlewares(func, middlewares)
-            return func
+    def middlewares(self, middleware):
+        """注册全局中间件"""
+        if isinstance(middleware, str):
+            middleware = import_string(middleware)
 
-        return decorator
+        if not issubclass(middleware, MiddlewareBase):
+            raise AssertionError(f'中间件类型错误,请继承MiddlewareBase类')
 
-    def add_middlewares(self, func, middlewares):
-        return self.__handlers_mapper.add_middlewares(func, middlewares)
+        self.middlewares_list.append(middleware)
