@@ -114,4 +114,3 @@ class DataObjects:
             return inner
 
         return wrapper
-

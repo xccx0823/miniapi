@@ -7,6 +7,8 @@ import yaml
 
 from miniapi.const import HTTP_METHODS
 from miniapi.exc import HTTPException
+from miniapi.httpserver.handler import WSGIRequestHandler
+from miniapi.httpserver.server import ThreadingWSGIServer
 from miniapi.middleware.base import MiddlewareBase
 from miniapi.objects import Objects
 from miniapi.request import Request
@@ -133,8 +135,8 @@ class Application:
 
     def run(self):
         host, port = self.__config.get_socket_info()
-        with make_server(host, port, self) as server:
-            print(f"Serving on {host}:{port}...")
+        with make_server(host, port, self, ThreadingWSGIServer, WSGIRequestHandler) as server:
+            print(f"Serving on http://{host}:{port}")  # noqa
             server.serve_forever()
 
     def wsgi_app(self, environ, start_response):
@@ -228,10 +230,10 @@ class Application:
         forbidden = forbidden or []
         for _m in middlewares:
             if not issubclass(_m, MiddlewareBase):
-                raise AssertionError(f'中间件类型错误,请继承MiddlewareBase类')
+                raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
         for _m in forbidden:
             if not issubclass(_m, MiddlewareBase):
-                raise AssertionError(f'中间件类型错误,请继承MiddlewareBase类')
+                raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
         _middlewares = []
         for _m in self.middlewares_list + middlewares:
             if _m in forbidden:
@@ -248,6 +250,6 @@ class Application:
             middleware = import_string(middleware)
 
         if not issubclass(middleware, MiddlewareBase):
-            raise AssertionError(f'中间件类型错误,请继承MiddlewareBase类')
+            raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
 
         self.middlewares_list.append(middleware)

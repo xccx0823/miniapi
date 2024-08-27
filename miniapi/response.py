@@ -1,9 +1,7 @@
 import json
 import mimetypes
-import os
 import typing as t
 
-from miniapi.exc import HTTPException
 from miniapi.status import HTTPStatus
 
 try:

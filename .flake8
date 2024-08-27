@@ -1,0 +1,16 @@
+[flake8]
+ignore = W291
+exclude =
+    *.pyc
+    .git
+    __pycache__
+    *.md
+    .venv
+    __init__.py
+
+max-line-length = 125
+max-complexity = 16
+format = pylint
+show_source = True
+statistics = True
+count = True
