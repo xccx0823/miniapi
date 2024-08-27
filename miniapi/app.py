@@ -156,8 +156,13 @@ class Application:
             start_response(HTTPStatus.INTERNAL_SERVER_ERROR, [('Content-Type', 'text/plain')])
             return [b'']
 
-        start_response(HTTPStatus.OK, response.headers)
-        return [response.body.encode('utf-8')]
+        start_response(response.status, response.headers)
+        if isinstance(response.body, str):
+            return [response.body.encode('utf-8')]
+        elif isinstance(response.body, bytes):
+            return [response.body]
+        else:
+            return [response.body]
 
     def dispatch_request(self, request) -> Response:
         path_exist, method_exist = self.__handlers_mapper.exists(request.path, request.method)

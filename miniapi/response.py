@@ -1,7 +1,9 @@
 import json
 import mimetypes
+import os
 import typing as t
 
+from miniapi.exc import HTTPException
 from miniapi.status import HTTPStatus
 
 try:
@@ -31,16 +33,14 @@ class Response:
         return {'status': self.status, 'headers': self.headers, 'body': self.body}
 
 
-class FileResponse(Response):
-    def __init__(self, filepath, status=HTTPStatus.OK, headers=None):
+class FileStreamResponse(Response):
+    def __init__(self, io: bytes, filename: str, status=HTTPStatus.OK, headers=None):
         headers = headers if headers is not None else []
-        filetype, _ = mimetypes.guess_type(filepath)
+        filetype, _ = mimetypes.guess_type(filename)
         filetype = filetype or 'application/octet-stream'
-        with open(filepath, 'rb') as f:
-            body = f.read()
         headers.append(('Content-Type', filetype))
-        headers.append(('Content-Disposition', f'attachment; filename="{filepath.split("/")[-1]}"'))
-        super().__init__(body=body, status=status, headers=headers, content_type=filetype)
+        headers.append(('Content-Disposition', f'attachment; filename="{filename}"'))
+        super().__init__(body=io, status=status, headers=headers, content_type=filetype)
 
 
 class JsonResponse(Response):
@@ -55,7 +55,7 @@ class JsonResponse(Response):
 class OrJsonResponse(Response):
     def __init__(self, data, status=HTTPStatus.OK, headers=None, **orjson_kwargs):
         if orjson is None:
-            raise ImportError('orjson is not installed, please install it to use OrJsonResponse.')
+            raise ImportError('orjson未安装，请安装它以使用OrJsonResponse.')
         body = orjson.dumps(data, **orjson_kwargs)
         content_type = 'application/json'
         headers = headers if headers is not None else []
