@@ -1,7 +1,4 @@
-from enum import Enum
-
-
-class HTTPStatus(Enum):
+class HTTPStatus:
     # 1xx Informational
     CONTINUE = "100 Continue"
     SWITCHING_PROTOCOLS = "101 Switching Protocols"

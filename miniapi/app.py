@@ -146,14 +146,20 @@ class Application:
 
             # miniapi HTTPException异常拦截
             if isinstance(e, HTTPException):
-                return Response(status=e.status)
+                start_response(e.status, [])
+                return [b'']
 
             # 其他异常均以500异常返回
-            return Response(status=HTTPStatus.INTERNAL_SERVER_ERROR)
+            # 打印堆栈信息
+            import traceback
+            traceback.print_exc()
+            start_response(HTTPStatus.INTERNAL_SERVER_ERROR, [('Content-Type', 'text/plain')])
+            return [b'']
 
-        return response(environ, start_response)
+        start_response(HTTPStatus.OK, response.headers)
+        return [response.body.encode('utf-8')]
 
-    def dispatch_request(self, request):
+    def dispatch_request(self, request) -> Response:
         path_exist, method_exist = self.__handlers_mapper.exists(request.path, request.method)
         if not path_exist:
             raise HTTPException(HTTPStatus.NOT_FOUND)
