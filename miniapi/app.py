@@ -24,7 +24,6 @@ class _SetupConfig:
     """初始化的配置管理"""
 
     SOCKET_CONFIG_KEY = 'socket'
-    PLUGINS_CONFIG_KEY = 'plugins'
     MIDDLEWARES_CONFIG_KEY = 'middlewares'
     FINAL_CONFIG_KEY = 'final'
 
@@ -50,10 +49,6 @@ class _SetupConfig:
     def get_middleware(self) -> t.List[str]:
         """获取中间件配置"""
         return self.config.get(self.MIDDLEWARES_CONFIG_KEY, [])
-
-    def get_plugin(self) -> t.List[str]:
-        """获取插件配置"""
-        return self.config.get(self.PLUGINS_CONFIG_KEY, [])
 
     def get_final(self) -> dict:
         """定义全局配置常量"""
