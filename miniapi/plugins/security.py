@@ -1,2 +1,0 @@
-class SecurityPlugin:
-    pass

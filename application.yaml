@@ -3,11 +3,6 @@ socket:
   host: 127.0.0.1
   port: 3333
 
-# 全局每次请求必会执行的插件
-plugins:
-  - name: miniapi.plugins:SecurityPlugin
-  - name: miniapi.plugins:CorsPlugin
-
 # 全局中间件
 middlewares:
   - name: miniapi.middlewares:CorsMiddleware

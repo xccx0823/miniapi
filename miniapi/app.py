@@ -20,7 +20,7 @@ from miniapi.utils import get_root_path, import_string
 objects: t.Optional[Objects] = None
 
 
-class _SetupConfigManager:
+class _SetupConfig:
     """初始化的配置管理"""
 
     SOCKET_CONFIG_KEY = 'socket'
@@ -100,11 +100,9 @@ class Application:
         self.objects = self._make_objects(obj_cls)
 
         # 请求上下文
-        self.__config = _SetupConfigManager(root_path)
+        self.__config = _SetupConfig(root_path)
 
-        # 插件和中间件的表现形式一样，不同的区别在于插件在配置文件中被义后时不会被中间件注册函数影响的，也就是固定会执行的，
-        # 而中间件则可以根据接口的定义情况来决定是否执行。
-        self.plugins_list: list = []
+        # 全局中间件列表
         self.middlewares_list: list = []
 
         # 自定义异常拦截函数列表
@@ -229,9 +227,13 @@ class Application:
         middlewares = middlewares or []
         forbidden = forbidden or []
         for _m in middlewares:
+            if isinstance(_m, str):
+                _m = import_string(_m)
             if not issubclass(_m, MiddlewareBase):
                 raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
         for _m in forbidden:
+            if isinstance(_m, str):
+                _m = import_string(_m)
             if not issubclass(_m, MiddlewareBase):
                 raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
         _middlewares = []
