@@ -63,3 +63,8 @@ class HTTPStatus:
     INSUFFICIENT_STORAGE = "507 Insufficient Storage"
     LOOP_DETECTED = "508 Loop Detected"
     NOT_EXTENDED = "510 Not Extended"
+
+    @classmethod
+    def values(cls):
+        return [
+            getattr(cls, attr) for attr in dir(cls) if not callable(getattr(cls, attr)) and not attr.startswith("__")]
