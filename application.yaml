@@ -4,13 +4,8 @@ socket:
   port: 3333
 
 # 全局中间件
-middlewares:
-  - name: miniapi.middlewares:CorsMiddleware
-
-# 中间件初始化配置
-middleware_settings:
-  CorsMiddleware:
-    allow_origins:
+# middlewares:
+#  - name: miniapi.middlewares:CorsMiddleware
 
 # 项目常量，可以在这里定义一些常量，供其他模块使用。
 final:

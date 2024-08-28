@@ -33,10 +33,11 @@ class Application:
         self.objects = self._make_objects(obj_cls)
 
         # 请求上下文
-        self.__config = self.init_config(root_path)
+        self._config = self.init_config(root_path)
 
         # 全局中间件列表
         self.middlewares_list: list = []
+        self._load_config_middlewares()
 
         # 自定义异常拦截函数列表
         self.error_blocking_funcs: list = []
@@ -45,10 +46,10 @@ class Application:
         self.__handlers_mapper = HandlerMapper()
 
     def config(self):
-        return self.__config.config
+        return self._config.config
 
     def final(self):
-        return self.__config.final
+        return self._config.final
 
     def set_objects(self, objs_cls: t.Type[Objects] = None):
         """添加继承了Objects的类，用于额外添加功能"""
@@ -72,7 +73,7 @@ class Application:
         return _objs
 
     def run(self):
-        host, port = self.__config.get_socket_info()
+        host, port = self._config.get_socket_info()
         with make_server(host, port, self, ThreadingWSGIServer, WSGIRequestHandler) as server:
             print(f"Serving on http://{host}:{port}")  # noqa
             server.serve_forever()
@@ -201,7 +202,7 @@ class Application:
 
         self.__handlers_mapper.add(path, _methods, func, middlewares=middlewares)
 
-    def middlewares(self, middleware):
+    def middlewares(self, middleware, **params):
         """注册全局中间件"""
         if isinstance(middleware, str):
             middleware = import_string(middleware)
@@ -209,4 +210,16 @@ class Application:
         if not issubclass(middleware, MiddlewareBase):
             raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
 
-        self.middlewares_list.append(middleware)
+        self.middlewares_list.append(middleware(**params))
+
+    def _load_config_middlewares(self):
+        """加载配置文件中的中间件"""
+        for middleware_config in self._config.get_middleware():  # type: dict
+            name = middleware_config.pop('name', None)
+            if not name:
+                raise ValueError('\n\napplication.yaml 中 middleware 配置项缺少 name 字段\n\n'
+                                 '# 示例: \n'
+                                 'middlewares:\n'
+                                 '  - name: demo.middleware.DemoMiddleware\n'
+                                 '    demo_param: "*"')
+            self.middlewares(name, **middleware_config)
