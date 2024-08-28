@@ -1,4 +1,5 @@
 import inspect
+import traceback
 import typing as t
 from wsgiref.simple_server import make_server
 
@@ -32,18 +33,22 @@ class Application:
         # miniapi框架所有额外功能的装饰器以及函数方法
         self.objects = self._make_objects(obj_cls)
 
-        # 请求上下文
+        # 初始化application.yaml配置
         self._config = self.init_config(root_path)
 
         # 全局中间件列表
         self.middlewares_list: list = []
+        self.middleware_config: dict = {}
         self._load_config_middlewares()
 
         # 自定义异常拦截函数列表
         self.error_blocking_funcs: list = []
 
         # 路由映射执行函数
-        self.__handlers_mapper = HandlerMapper()
+        self._handlers_mapper = HandlerMapper()
+
+        # app挂在g对象上
+        g.app = self
 
     def config(self):
         return self._config.config
@@ -93,10 +98,17 @@ class Application:
         """wsgi请求上下文"""
         request = Request(environ)
         try:
-            response = self.dispatch_request(request)
+            path_exist, method_exist = self._handlers_mapper.exists(request.path, request.method)
+            if not path_exist:
+                raise HTTPException(HTTPStatus.NOT_FOUND)
+            if not method_exist:
+                raise HTTPException(HTTPStatus.METHOD_NOT_ALLOWED)
 
-            # 自适应返回结果
-            response = self.adapt_response(response)
+            handler, middlewares = self._handlers_mapper.get(request.path, request.method)
+            for middleware in reversed(middlewares):
+                middleware_conf = self.middleware_config.get(middleware.generate_nui_name(), {})
+                handler = middleware(handler, **middleware_conf)
+            response = self.adapt_response(self.dispatch_request(request, handler))
 
         except Exception as e:
 
@@ -107,7 +119,6 @@ class Application:
 
             # 其他异常均以500异常返回
             # 打印堆栈信息
-            import traceback
             traceback.print_exc()
             start_response(HTTPStatus.INTERNAL_SERVER_ERROR, [('Content-Type', 'text/plain')])
             return [b'']
@@ -120,15 +131,9 @@ class Application:
         else:
             return [response.body]
 
-    def dispatch_request(self, request) -> Response:
-        path_exist, method_exist = self.__handlers_mapper.exists(request.path, request.method)
-        if not path_exist:
-            raise HTTPException(HTTPStatus.NOT_FOUND)
-        if not method_exist:
-            raise HTTPException(HTTPStatus.METHOD_NOT_ALLOWED)
-        handler, middlewares = self.__handlers_mapper.get(request.path, request.method)
-        response = handler(request)
-        return response
+    @staticmethod
+    def dispatch_request(request, handler) -> Response:
+        return handler(request)
 
     def route(
             self,
@@ -200,9 +205,9 @@ class Application:
                 continue
             _middlewares.append(_m)
 
-        self.__handlers_mapper.add(path, _methods, func, middlewares=middlewares)
+        self._handlers_mapper.add(path, _methods, func, middlewares=_middlewares)
 
-    def middlewares(self, middleware, **params):
+    def add_middlewares(self, middleware, **params):
         """注册全局中间件"""
         if isinstance(middleware, str):
             middleware = import_string(middleware)
@@ -210,7 +215,8 @@ class Application:
         if not issubclass(middleware, MiddlewareBase):
             raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
 
-        self.middlewares_list.append(middleware(**params))
+        self.middlewares_list.append(middleware)
+        self.middleware_config[middleware.generate_nui_name(**params)] = params
 
     def _load_config_middlewares(self):
         """加载配置文件中的中间件"""
@@ -222,4 +228,4 @@ class Application:
                                  'middlewares:\n'
                                  '  - name: demo.middleware.DemoMiddleware\n'
                                  '    demo_param: "*"')
-            self.middlewares(name, **middleware_config)
+            self.add_middlewares(name, **middleware_config)

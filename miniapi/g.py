@@ -5,3 +5,4 @@ from miniapi.objects import Objects
 
 objects: t.Optional[Objects] = None
 config: t.Optional[_SetupConfig] = None
+app: t.Optional[t.Any] = None

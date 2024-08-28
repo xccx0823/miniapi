@@ -1,19 +1,19 @@
 class MiddlewareBase:
     """中间件基类"""
 
-    def __init__(self, **kwargs):
+    def __init__(self, handler, **kwargs):
+        self.handler = handler
         self.kwargs = kwargs
 
-    @staticmethod
-    def before_request(request):
-        """在请求前执行的钩子函数"""
-        return request
+    def __call__(self, request):
+        """中间件调用函数"""
+        return self.process_request(request)
 
-    @staticmethod
-    def after_request(response):
-        """在请求后执行的钩子函数"""
-        return response
+    def process_request(self, request):
+        """处理请求"""
+        raise NotImplementedError()
 
-    def generate_object_nui_name(self):
+    @classmethod
+    def generate_nui_name(cls, **kwargs):
         """根据类名和kwargs生成对象名称"""
-        return f"{self.__class__.__name__}_{'_'.join([str(k) + '_' + str(v) for k, v in self.kwargs.items()])}"
+        return f"{cls.__name__}_{'_'.join(f'{k}_{v}' for k, v in kwargs.items())}"
