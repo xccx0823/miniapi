@@ -79,9 +79,12 @@ class Application:
 
     def run(self):
         host, port = self._config.get_socket_info()
-        with make_server(host, port, self, ThreadingWSGIServer, WSGIRequestHandler) as server:
-            print(f"Serving on http://{host}:{port}")  # noqa
-            server.serve_forever()
+        try:
+            with make_server(host, port, self, ThreadingWSGIServer, WSGIRequestHandler) as server:
+                print(f"Serving on http://{host}:{port}")  # noqa
+                server.serve_forever()
+        except KeyboardInterrupt:
+            server.shutdown()
 
     @staticmethod
     def adapt_response(func):
@@ -98,6 +101,7 @@ class Application:
                 return response
             else:
                 raise ValueError(f"返回值类型错误,请返回str,bytes,dict,Response类型,当前返回值类型为{type(response)}")
+
         return wrapper
 
     def wsgi_app(self, environ, start_response):
