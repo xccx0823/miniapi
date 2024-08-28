@@ -4,8 +4,9 @@ socket:
   port: 3333
 
 # 全局中间件
-# middlewares:
-#  - name: miniapi.middlewares:CorsMiddleware
+middlewares:
+  - name: miniapi.middleware.logger:LoggerMiddleware
+    logger_name: 'miniapi.log'
 
 # 项目常量，可以在这里定义一些常量，供其他模块使用。
 final:

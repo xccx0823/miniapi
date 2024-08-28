@@ -84,15 +84,21 @@ class Application:
             server.serve_forever()
 
     @staticmethod
-    def adapt_response(response):
-        if isinstance(response, Response):
-            return response
-        elif isinstance(response, str):
-            return Response(body=response)
-        elif isinstance(response, (list, dict)):
-            return JsonResponse(data=response)
-        else:
-            return Response(body=str(response))
+    def adapt_response(func):
+
+        def wrapper(*args, **kwargs):
+            response = func(*args, **kwargs)
+            if isinstance(response, str):
+                return Response(body=response)
+            elif isinstance(response, bytes):
+                return Response(body=response)
+            elif isinstance(response, dict):
+                return JsonResponse(response)
+            elif isinstance(response, Response):
+                return response
+            else:
+                raise ValueError(f"返回值类型错误,请返回str,bytes,dict,Response类型,当前返回值类型为{type(response)}")
+        return wrapper
 
     def wsgi_app(self, environ, start_response):
         """wsgi请求上下文"""
@@ -104,11 +110,13 @@ class Application:
             if not method_exist:
                 raise HTTPException(HTTPStatus.METHOD_NOT_ALLOWED)
 
+            # 获取handler和中间件
             handler, middlewares = self._handlers_mapper.get(request.path, request.method)
+            handler = self.adapt_response(handler)
             for middleware in reversed(middlewares):
                 middleware_conf = self.middleware_config.get(middleware.generate_nui_name(), {})
                 handler = middleware(handler, **middleware_conf)
-            response = self.adapt_response(self.dispatch_request(request, handler))
+            response = self.dispatch_request(request, handler)
 
         except Exception as e:
 

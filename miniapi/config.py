@@ -26,8 +26,8 @@ class _SetupConfig:
     def get_socket_info(self) -> t.Tuple[str, int]:
         """获取并校验启动信息配置"""
         conf = self.config.get(self.SOCKET_CONFIG_KEY, dict())
-        host = conf.pop('host', self.DEFAULT_HOST)
-        port = conf.pop('port', self.DEFAULT_PORT)
+        host = conf.get('host', self.DEFAULT_HOST)
+        port = conf.get('port', self.DEFAULT_PORT)
         return host, port
 
     def get_middleware(self) -> t.List[str]:
