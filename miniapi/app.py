@@ -90,7 +90,8 @@ class Application:
         except KeyboardInterrupt:
             server.shutdown()
 
-    def adapt_response(self, func):
+    @staticmethod
+    def adapt_response(func):
 
         def wrapper(*args, **kwargs):
             response = func(*args, **kwargs)
