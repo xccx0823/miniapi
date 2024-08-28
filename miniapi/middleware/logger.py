@@ -27,21 +27,21 @@ class LoggerMiddleware(MiddlewareBase):
             bg_color = 42
         elif response.status.startswith('3'):
             fg_color = 30
-            bg_color = 41
+            bg_color = 44
         elif response.status.startswith('4'):
             fg_color = 30
             bg_color = 43
         elif response.status.startswith('5'):
             fg_color = 30
-            bg_color = 41
+            bg_color = 45
         else:
             fg_color = 30
-            bg_color = 47
+            bg_color = 41
 
         log.info(
             f"{self.print_with_colors(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' ', 30, 46)}"
-            f"{self.print_with_colors(' ' + request.method + '::', fg_color, bg_color)}"
-            f"{self.print_with_colors(request.path + ' ', fg_color, bg_color)}"
+            f"{self.print_with_colors(' ' + request.method + ' ', 30, 107)}"
+            f"{self.print_with_colors(' ' + request.path + ' ', fg_color, bg_color)}"
             f"{self.print_with_colors(response.status + ' ' + str(round(end - start, 3)) + 's ', fg_color, bg_color)}"
         )
         return response
