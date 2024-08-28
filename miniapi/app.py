@@ -37,8 +37,12 @@ class Application:
         self._config = self.init_config(root_path)
 
         # 全局中间件列表
-        self.middlewares_list: list = []
-        self.middleware_config: dict = {}
+        # middleware_mapper: 全局中间件映射表 {中间件类名: 中间件对象}
+        # middleware_forbidden_mapper: 禁用全局中间件映射表 {请求方法 + 请求路径: 中间件类名列表}
+        # middleware_partial_mapper: 局部中间件映射表 {请求方法 + 请求路径: 中间件对象列表}
+        self.middleware_mapper: dict = {}
+        self.middleware_forbidden_mapper: dict = {}
+        self.middleware_partial_mapper: dict = {}
         self._load_config_middlewares()
 
         # 自定义异常拦截函数列表
@@ -86,8 +90,7 @@ class Application:
         except KeyboardInterrupt:
             server.shutdown()
 
-    @staticmethod
-    def adapt_response(func):
+    def adapt_response(self, func):
 
         def wrapper(*args, **kwargs):
             response = func(*args, **kwargs)
@@ -106,34 +109,56 @@ class Application:
 
     def wsgi_app(self, environ, start_response):
         """wsgi请求上下文"""
-        request = Request(environ)
-        try:
-            path_exist, method_exist = self._handlers_mapper.exists(request.path, request.method)
-            if not path_exist:
-                raise HTTPException(HTTPStatus.NOT_FOUND)
-            if not method_exist:
-                raise HTTPException(HTTPStatus.METHOD_NOT_ALLOWED)
+        return self.dispatch_request(environ, start_response)
 
-            # 获取handler和中间件
-            handler, middlewares = self._handlers_mapper.get(request.path, request.method)
-            handler = self.adapt_response(handler)
-            for middleware in reversed(middlewares):
-                middleware_conf = self.middleware_config.get(middleware.generate_nui_name(), {})
-                handler = middleware(handler, **middleware_conf)
-            response = self.dispatch_request(request, handler)
+    def dispatch_request(self, environ, start_response):
+        """请求处理"""
+        request = Request(environ)
+
+        try:
+            request_key = f'{request.method}:{request.path}'
+
+            # 全局中间件
+            for name, middleware_obj in self.middleware_mapper.items():
+                if request_key in self.middleware_forbidden_mapper.get(name, []):
+                    continue
+                request = middleware_obj.before_request(request)
+
+            # 局部中间件
+            partial_middleware_objs = self.middleware_partial_mapper.get(request_key, [])
+            for middleware_obj in partial_middleware_objs:
+                request = middleware_obj.before_request(request)
+
+            try:
+                response = self.context(request)
+            except Exception as e:
+                # miniapi HTTPException异常拦截
+                if isinstance(e, HTTPException):
+                    response = Response('', e.status)
+                else:
+                    # 其他异常均以500异常返回
+                    # 打印堆栈信息
+                    traceback.print_exc()
+                    response = Response('', HTTPStatus.INTERNAL_SERVER_ERROR)
+
+            for middleware_obj in reversed(partial_middleware_objs):
+                response = middleware_obj.after_request(request, response)
+
+            for name, middleware_obj in self.middleware_mapper.items():
+                if request_key in self.middleware_forbidden_mapper.get(name, []):
+                    continue
+                response = middleware_obj.after_request(request, response)
 
         except Exception as e:
 
             # miniapi HTTPException异常拦截
             if isinstance(e, HTTPException):
-                start_response(e.status, [])
-                return [b'']
-
-            # 其他异常均以500异常返回
-            # 打印堆栈信息
-            traceback.print_exc()
-            start_response(HTTPStatus.INTERNAL_SERVER_ERROR, [('Content-Type', 'text/plain')])
-            return [b'']
+                response = Response('', e.status)
+            else:
+                # 其他异常均以500异常返回
+                # 打印堆栈信息
+                traceback.print_exc()
+                response = Response('', HTTPStatus.INTERNAL_SERVER_ERROR)
 
         start_response(response.status, response.headers)
         if isinstance(response.body, str):
@@ -143,8 +168,17 @@ class Application:
         else:
             return [response.body]
 
-    @staticmethod
-    def dispatch_request(request, handler) -> Response:
+    def context(self, request: Request) -> Response:
+        # 404异常处理
+        method_handlers = self._handlers_mapper.get_method_handlers(request.path)
+        if not method_handlers:
+            raise HTTPException(HTTPStatus.NOT_FOUND)
+
+        # 405异常处理
+        handler = method_handlers.get(request.method, None)
+        if not handler:
+            raise HTTPException(HTTPStatus.METHOD_NOT_ALLOWED)
+
         return handler(request)
 
     def route(
@@ -181,8 +215,8 @@ class Application:
             path: str,
             func=None,
             methods: t.Optional[t.List[str]] = None,
-            middlewares: t.Optional[list] = None,
-            forbidden: t.Optional[list] = None):
+            middlewares: t.Optional[t.List[t.Union[MiddlewareBase, str]]] = None,
+            forbidden: t.Optional[t.List[t.Union[MiddlewareBase, str]]] = None):
         """函数的方式注册函数路由"""
         _methods = []
         for method in methods:
@@ -196,48 +230,60 @@ class Application:
         if 'request' not in signature.parameters:
             raise ValueError(f"函数 '{func.__name__}' 必须包含 'request' 参数.")
 
-        # 检查中间件
-        middlewares = middlewares or []
-        forbidden = forbidden or []
-        for _m in middlewares:
-            if isinstance(_m, str):
-                _m = import_string(_m)
-            if not issubclass(_m, MiddlewareBase):
-                raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
-        for _m in forbidden:
-            if isinstance(_m, str):
-                _m = import_string(_m)
-            if not issubclass(_m, MiddlewareBase):
-                raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
-        _middlewares = []
-        for _m in self.middlewares_list + middlewares:
-            if _m in forbidden:
-                continue
-            if _m in _middlewares:
-                continue
-            _middlewares.append(_m)
+        # 添加自适应返回结果
+        func = self.adapt_response(func)
 
-        self._handlers_mapper.add(path, _methods, func, middlewares=_middlewares)
+        # 禁用全局中间件
+        forbidden_middleware_objs = self._parse_route_middlewares(forbidden, is_obj=False)
 
-    def add_middlewares(self, middleware, **params):
+        # 局部中间件
+        middleware_objs = self._parse_route_middlewares(middlewares)
+
+        for method in _methods:
+            key = f'{method}:{path}'
+            self.middleware_forbidden_mapper[key] = forbidden_middleware_objs
+            self.middleware_partial_mapper[key] = middleware_objs
+            self._handlers_mapper.add(path, method, func)
+
+    def _parse_route_middlewares(self, middlewares, is_obj=True):
+        """检查路由注册的中间件"""
+        middleware_objs = []
+        if not middlewares:
+            return middleware_objs
+        for m in middlewares:
+            if isinstance(m, str):
+                m_obj = self.middleware_mapper.get(m)
+                if not m_obj:
+                    raise AssertionError(f'未注册中间件:{m}')
+                middleware_obj = m_obj
+            elif not isinstance(m, MiddlewareBase):
+                raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
+            else:
+                middleware_obj = m
+            if is_obj:
+                middleware_objs.append(middleware_obj)
+            else:
+                middleware_objs.append(middleware_obj.nui_name())
+        return middleware_objs
+
+    def add_middlewares(self, middleware: t.Union[MiddlewareBase, str]):
         """注册全局中间件"""
         if isinstance(middleware, str):
-            middleware = import_string(middleware)
+            middleware = import_string(middleware)()
 
-        if not issubclass(middleware, MiddlewareBase):
+        if not isinstance(middleware, MiddlewareBase):
             raise AssertionError('中间件类型错误,请继承MiddlewareBase类')
 
-        self.middlewares_list.append(middleware)
-        self.middleware_config[middleware.generate_nui_name(**params)] = params
+        self.middleware_mapper[middleware.uni_name()] = middleware
 
     def _load_config_middlewares(self):
         """加载配置文件中的中间件"""
         for middleware_config in self._config.get_middleware():  # type: dict
-            name = middleware_config.pop('name', None)
+            name = middleware_config.get('name')
             if not name:
                 raise ValueError('\n\napplication.yaml 中 middleware 配置项缺少 name 字段\n\n'
                                  '# 示例: \n'
                                  'middlewares:\n'
                                  '  - name: demo.middleware.DemoMiddleware\n'
                                  '    demo_param: "*"')
-            self.add_middlewares(name, **middleware_config)
+            self.add_middlewares(name)

@@ -10,6 +10,7 @@ class Request:
         self.headers = self._parse_headers(environ)
         self.body = self._get_body(environ)
         self._parse_query_params()
+        self.state: dict = {}
 
     @staticmethod
     def _parse_headers(environ):
