@@ -117,10 +117,11 @@ class Application:
 
         try:
             request_key = f'{request.method}:{request.path}'
+            forbidden_middleware_names = self.middleware_forbidden_mapper.get(request_key, [])
 
             # 全局中间件
             for name, middleware_obj in self.middleware_mapper.items():
-                if request_key in self.middleware_forbidden_mapper.get(name, []):
+                if name in forbidden_middleware_names:
                     continue
                 request = middleware_obj.before_request(request)
 
@@ -145,7 +146,7 @@ class Application:
                 response = middleware_obj.after_request(request, response)
 
             for name, middleware_obj in self.middleware_mapper.items():
-                if request_key in self.middleware_forbidden_mapper.get(name, []):
+                if name in forbidden_middleware_names:
                     continue
                 response = middleware_obj.after_request(request, response)
 
@@ -263,7 +264,7 @@ class Application:
             if is_obj:
                 middleware_objs.append(middleware_obj)
             else:
-                middleware_objs.append(middleware_obj.nui_name())
+                middleware_objs.append(middleware_obj.uni_name())
         return middleware_objs
 
     def add_middlewares(self, middleware: t.Union[MiddlewareBase, str]):
