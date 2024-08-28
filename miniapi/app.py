@@ -51,6 +51,9 @@ class Application:
         # 路由映射执行函数
         self._handlers_mapper = HandlerMapper()
 
+        # 扩展
+        self.extensions = {}
+
         # app挂在g对象上
         g.app = self
 
