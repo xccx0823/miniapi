@@ -5,7 +5,6 @@ from wsgiref.simple_server import make_server
 
 from miniapi import g
 from miniapi.config import _SetupConfig
-from miniapi.const import HTTP_METHODS
 from miniapi.exc import HTTPException
 from miniapi.httpserver.handler import WSGIRequestHandler
 from miniapi.httpserver.server import ThreadingWSGIServer
@@ -16,6 +15,8 @@ from miniapi.response import Response, JsonResponse
 from miniapi.route import HandlerMapper
 from miniapi.status import HTTPStatus
 from miniapi.utils import get_root_path, import_string
+
+HTTP_METHODS = ['GET', 'POST', 'PUT', 'DELETE', 'PATCH']
 
 
 class Application:
