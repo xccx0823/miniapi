@@ -38,14 +38,19 @@ class LoggerMiddleware(MiddlewareBase):
             fg_color = 30
             bg_color = 41
 
+        if request.environ['QUERY_STRING']:
+            path = ' ' + request.path + '?' + request.environ['QUERY_STRING'] + ' '
+        else:
+            path = ' ' + request.path + ' '
+
         log.info(
-            f"{self.print_with_colors(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' ', 30, 46)}"
-            f"{self.print_with_colors(' ' + request.method + ' ', 30, 107)}"
-            f"{self.print_with_colors(' ' + request.path + ' ', fg_color, bg_color)}"
-            f"{self.print_with_colors(response.status + ' ' + str(round(end - start, 3)) + 's ', fg_color, bg_color)}"
+            f"{self.print_colors(datetime.now().strftime('%Y-%m-%d %H:%M:%S') + ' ', 30, 46)}"
+            f"{self.print_colors(' ' + request.method + ' ', 30, 107)}"
+            f"{self.print_colors(path, fg_color, bg_color)}"
+            f"{self.print_colors(response.status + ' ' + str(round(end - start, 3)) + 's ', fg_color, bg_color)}"
         )
         return response
 
     @staticmethod
-    def print_with_colors(text, fg_color, bg_color):
+    def print_colors(text, fg_color, bg_color):
         return f"\033[{fg_color};{bg_color}m{text}\033[0m"
