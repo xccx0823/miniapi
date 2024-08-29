@@ -121,50 +121,32 @@ class Application:
         request = Request(environ)
 
         try:
+            # 请求前
             request_key = f'{request.method}:{request.path}'
             forbidden_middleware_names = self.middleware_forbidden_mapper.get(request_key, [])
-
-            # 全局中间件
-            for name, middleware_obj in self.middleware_mapper.items():
-                if name in forbidden_middleware_names:
-                    continue
-                request = middleware_obj.before_request(request)
-
-            # 局部中间件
             partial_middleware_objs = self.middleware_partial_mapper.get(request_key, [])
-            for middleware_obj in partial_middleware_objs:
-                request = middleware_obj.before_request(request)
+            request = self.execute_before_request(request, partial_middleware_objs, forbidden_middleware_names)
 
             try:
                 response = self.context(request)
-            except Exception as e:
-                # miniapi HTTPException异常拦截
-                if isinstance(e, HTTPException):
-                    response = Response('', e.status)
-                else:
-                    # 其他异常均以500异常返回
-                    # 打印堆栈信息
-                    traceback.print_exc()
-                    response = Response('', HTTPStatus.INTERNAL_SERVER_ERROR)
 
-            for middleware_obj in reversed(partial_middleware_objs):
-                response = middleware_obj.after_request(request, response)
-
-            for name, middleware_obj in self.middleware_mapper.items():
-                if name in forbidden_middleware_names:
-                    continue
-                response = middleware_obj.after_request(request, response)
-
-        except Exception as e:
-
-            # miniapi HTTPException异常拦截
-            if isinstance(e, HTTPException):
+            # 拦截接口执行函数的异常
+            except HTTPException as e:
                 response = Response('', e.status)
-            else:
-                # 其他异常均以500异常返回
-                # 打印堆栈信息
+            except Exception:  # noqa
                 traceback.print_exc()
                 response = Response('', HTTPStatus.INTERNAL_SERVER_ERROR)
+
+            # 请求后
+            response = self.execute_after_request(request, response, partial_middleware_objs,
+                                                  forbidden_middleware_names)
+
+        # 拦截中间件引发的异常
+        except HTTPException as e:
+            response = Response('', e.status)
+        except Exception:  # noqa
+            traceback.print_exc()
+            response = Response('', HTTPStatus.INTERNAL_SERVER_ERROR)
 
         start_response(response.status, response.headers)
         if isinstance(response.body, str):
@@ -173,6 +155,24 @@ class Application:
             return [response.body]
         else:
             return [response.body]
+
+    def execute_after_request(self, request, response, partial, forbidden):
+        for middleware_obj in reversed(partial):
+            response = middleware_obj.after_request(request, response)
+        for name, middleware_obj in self.middleware_mapper.items():
+            if name in forbidden:
+                continue
+            response = middleware_obj.after_request(request, response)
+        return response
+
+    def execute_before_request(self, request, partial, forbidden):
+        for name, middleware_obj in self.middleware_mapper.items():
+            if name in forbidden:
+                continue
+            request = middleware_obj.before_request(request)
+        for middleware_obj in partial:
+            request = middleware_obj.before_request(request)
+        return request
 
     def context(self, request: Request) -> Response:
         # 404异常处理

@@ -19,12 +19,6 @@ class DataObjects:
         :param column: 字段
         :param default: 默认值
         :param ignore: 没有取到对应的值的时候是否跳过本次获取，不跳过会使用默认值填充
-
-        >>> from miniapi import objects
-        >>>
-        >>> example_data = [{'a': 1, 'b': 2, 'c': 3}, ...]
-        >>> result = objects.o_get(example_data, 'a')
-        >>> # result = [1, ...]
         """
         lis = []
         for row in data:
@@ -43,12 +37,6 @@ class DataObjects:
 
         :param data: 数据
         :param columns: 字段列表
-
-        >>> from miniapi import objects
-        >>>
-        >>> example_data = [{'a': 1, 'b': 2, 'c': 3}, ...]
-        >>> example_data = objects.o_drop(example_data, ['a'])
-        >>> # example_data = [{'b': 2, 'c': 3}, ...]
         """
         drop_data = []
         for row in data:
@@ -65,12 +53,6 @@ class DataObjects:
         :param index: 索引
         :param default: 默认值
         :param ignore: 没有取到对应的值的时候是否跳过本次获取，不跳过会使用默认值填充
-
-        >>> from miniapi import objects
-        >>>
-        >>> example_data = [[1, 2, 3], ...]
-        >>> result = objects.o_index(example_data, 1)
-        >>> # result = [2, ...]
         """
         values = []
         for row in data:
