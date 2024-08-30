@@ -41,8 +41,12 @@ class _SetupConfig:
     @staticmethod
     def read_app_yaml(root_path):
         """读取app所需要的ini配置文件"""
-        with open(os.path.join(root_path, 'application.yaml'), 'r') as file:
-            data = yaml.safe_load(file)
+        try:
+            with open(os.path.join(root_path, 'application.yaml'), 'r') as file:
+                data = yaml.safe_load(file)
+        except UnicodeDecodeError:
+            with open(os.path.join(root_path, 'application.yaml'), 'r', encoding='utf-8') as file:
+                data = yaml.safe_load(file)
         return data
 
     def recursively_capitalize_keys(self, input_data):
