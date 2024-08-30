@@ -12,7 +12,7 @@ class _SetupConfig:
     FINAL_CONFIG_KEY = 'final'
 
     DEFAULT_HOST = 'localhost'
-    DEFAULT_PORT = 3323
+    DEFAULT_PORT = 3333
 
     def __init__(self, root_path):
         # 全局配置
